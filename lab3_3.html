@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Translators. Lab #1. Lexical analysis</title>
+    <link rel="stylesheet" type="text/css" href="lab1.css">
+</head>
+<body>
+    <div class="container">
+        <div id="source_div">
+            <textarea id="source" name="source" spellcheck="false" rows="30"></textarea> 
+            <!-- <textarea id="run" name="run" spellcheck="false" rows="10"> -->
+                <p class="status" id="run" name="run" spellcheck="false"></p>
+            <!-- </textarea>  -->
+        </div>
+        <div id="lexems_div"> 
+            <p class="status" id="lexical_analyzer_status"></p>
+            <table id="lexems" spellcheck="false" scrollbar="true">
+                <tr>
+                    <th class="lexem_th">
+                        #
+                    </th>
+                    <th class="lexem_th">
+                        Лексема
+                    </th>
+                    <th class="lexem_th">
+                        Токен
+                    </th>
+                    <th class="lexem_th">
+                        Рядок
+                    </th>
+                    <th class="history_th">
+                        Історія
+                    </th>
+                </tr>
+            </table> 
+            <p class="status" id="syntax_analyzer_status"></p>
+            <table id="poliz" spellcheck="false" scrollbar="true">
+                <tr>
+                    <th class="poliz_th">
+                        #
+                    </th>
+                    <th class="poliz_th">
+                        Ім'я
+                    </th>
+                    <th class="poliz_th">
+                        Тип
+                    </th>
+                    <th class="poliz_th">
+                        Токен
+                    </th>
+                    <th class="poliz_th">
+                        Тип даних
+                    </th>
+                    <th class="poliz_th">
+                        Значення
+                    </th>
+                </tr>
+            </table> 
+            <p class="status" id="poliz_translator_status"></p>
+        </div>
+    </div>
+</body>
+<!-- <script src="https://unpkg.com/js-logger/src/logger.min.js"></script> -->
+
+<!-- Final state machine (FSM) base class-->
+<script src="fsm_base.js"></script>
+
+<!-- Task specific transition FSM classes -->
+<script src="lexical_analyzer.js"></script>
+
+<!-- Task specific syntax analyzer -->
+<script src="syntax_analyzer.js"></script>
+
+<!--- POLIZ interpreter -->
+<script src="postfix_rte.js"></script>
+
+<script>
+
+//source code input field
+var source = document.getElementById("source");
+source.oninput = onSourceChange; 
+source.onchange = onSourceChange;
+window.onload = startTranslator;
+// source.onchange = () => alert("source.onchange"); 
+// source.oninput = () => alert("source.oninput");; 
+// window.onload = () => alert("window.onload");;
+
+//*** Lexical analyzer *** 
+//source code stream
+var src = new SourceStream();
+
+//Table of tokens. Output for FSM
+    //tokens[0] - lexem
+    //tokens[1] - token
+    //tokens[2] - source row
+    //tokens[3] - FSM trail
+var tokens = new Array;
+
+var lexicalStatusLabel = document.getElementById("lexical_analyzer_status");
+lexicalStatusLabel.innerHTML = "";
+
+var lexicalAnalyzer = new LexicalAnalyzer(src, tokens, lexicalStatusLabel);
+
+//view for the lexeme table (Array tokens)
+var lexems = document.getElementById("lexems");
+
+//*** Syntax analyzer
+var syntaxStatusLabel = document.getElementById("syntax_analyzer_status");
+syntaxStatusLabel.innerHTML = "";
+
+var syntaxAnalyzer = new TaskSpecificSyntaxAnalizer(tokens);
+syntaxAnalyzer.setStatusLabel(syntaxStatusLabel);
+syntaxAnalyzer.reset();
+var polizList = new PolizList;
+
+//view for the POLIZ list
+var poliz = document.getElementById("poliz");
+
+//view for program execution
+var runArea = document.getElementById("run");
+var isRunning = false;
+
+//debouncing of multiple onSourceChange events
+var translatorTimers = 0; //true - processing and timeout has completed
+var lastSource = "";
+
+function onSourceChange(e) {
+    if (source.value == lastSource) return;
+    lastSource = source.value; 
+    initTranslator();
+
+    //prevent multiple calls
+    // if (!isProcessed) {
+    //     isSourceChanged = true;
+    //     return;
+    // }
+    //start translator after delay
+    translatorTimers++;
+    setTimeout( () => { if ( !--translatorTimers ) startTranslator() } , 1000 );
+}
+
+function initTranslator() {
+    isRunning = false; //stop running
+    lexicalStatusLabel.innerHTML = ""
+    syntaxStatusLabel.innerHTML = "";
+    syntaxAnalyzer.reset();
+    runArea.innerHTML = "Waiting for changing complete...";
+}
+
+function startTranslator() {
+    src.setSource(source.value);
+
+    tokens.length = 0; //delete old tokens
+    while ( lexems.rows.length > 1 ) lexems.deleteRow(lexems.rows.length-1); //delete tokens table rows
+    while ( poliz.rows.length > 1 ) poliz.deleteRow(poliz.rows.length-1); //delete poliz table rows
+
+    var noLexicalErrors = false;
+    //*************  Start FSM to lexeme analyzer  *****************
+    if ( noLexicalErrors = lexicalAnalyzer.analyze()  ) { //lexical check
+        lexicalStatusLabel.innerHTML = "Lexeme analyzer: OK";
+    } 
+    lexicalStatusLabel.innerHTML = "*** Lexeme analyzer ***\r\n" + lexicalStatusLabel.innerHTML; 
+
+    var s = "";
+    var tr, td, txt;
+    var index = 0;
+    //*************  Fill view for tokens ***************
+    tokens.forEach(t => {
+        tr = lexems.insertRow(lexems.rows.length);
+        for (var i = -1; i < 4; i++) {
+            td = tr.insertCell(i+1);
+            if (i < 0) txt = document.createTextNode(index++);
+            else txt = document.createTextNode(t[i]);
+            td.appendChild(txt);
+        }
+    });
+
+    if (! noLexicalErrors) {
+        run.innerHTML = "Source has incorrect lexeme";
+        return;
+    }
+
+    //**************** Run syntax analyzer *****************
+    syntaxStatusLabel.innerHTML = "*** Syntax analyzer ***";
+    
+    polizList.clear();
+    //start 
+    if (syntaxAnalyzer.Program("Source is incorrect", polizList)) { //lexical analyzer
+        syntaxStatusLabel.innerHTML += "\r\nOK";    
+        //*************  Fill view for POLIZ ***************
+        index = 0;
+        if (polizList) polizList.list.forEach(p => {
+            tr = poliz.insertRow(poliz.rows.length);
+            td = tr.insertCell(0);
+            td.appendChild(document.createTextNode(index++));
+            td = tr.insertCell(1);
+            td.appendChild(document.createTextNode(p.name));
+            td = tr.insertCell(2);
+            td.appendChild(document.createTextNode(p.type));
+            td = tr.insertCell(3);
+            td.appendChild(document.createTextNode(p.tokenId));
+            td = tr.insertCell(4);
+            td.appendChild(document.createTextNode(p.dataType));
+            td = tr.insertCell(5);
+            td.appendChild(document.createTextNode(p.val));
+        });
+    }
+    else {
+        syntaxStatusLabel.innerHTML += "\r\nErrors has found!";
+        runArea.innerHTML = "Source has incorrect syntax";
+        return;
+    }
+
+    //Run POLIZ 
+    runArea.innerHTML = 'Source is correct   <button id="run_start">Run</button>';
+    document.getElementById("run_start").onclick = () => {
+        runArea.innerHTML = "Program is running...\n"; 
+        runPolizProgram(); 
+    };
+    
+    // <input id="run_input" type="text"><br id="run_input_br">';
+}
+
+
+
+</script>
+</html>

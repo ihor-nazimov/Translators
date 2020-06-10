@@ -1,0 +1,20 @@
+{
+  var A1;
+var B2a = 1., 
+    b7, c, i=5, 
+	d = false;
+
+  read(b, c);
+
+  c = -B2a + (B2a^2 * 3.12) + c;
+
+  if i>5 then goto label1:;
+
+  for (k = 2+2*3; k*10 <= 100; k = k+1) {
+    write(k);
+    c = c*10
+  };
+
+label1:;
+   write(B2a, c)
+}
